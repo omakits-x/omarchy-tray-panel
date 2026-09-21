@@ -41,6 +41,9 @@ var strings = {
     "panel.placement.center": "Center",
     "panel.placement.right": "Right",
     "panel.barPosition": "Tray position",
+    "panel.revealOnAttention": "Reveal flashing",
+    "panel.toggle.on": "On",
+    "panel.toggle.off": "Off",
 
     "status.shown": "Shown",
     "status.hidden": "Hidden"
@@ -73,6 +76,9 @@ var strings = {
     "panel.placement.center": "中",
     "panel.placement.right": "右",
     "panel.barPosition": "托盘位置",
+    "panel.revealOnAttention": "闪烁时显示",
+    "panel.toggle.on": "开",
+    "panel.toggle.off": "关",
 
     "status.shown": "显示中",
     "status.hidden": "已隐藏"

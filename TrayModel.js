@@ -100,6 +100,61 @@ function isHidden(hiddenIds, id) {
   return asList(hiddenIds).indexOf(String(id)) !== -1
 }
 
+// Should this item be drawn on the bar?
+//
+// Three ways an item ends up on the bar:
+//   1. the user never hid it;
+//   2. it asks for attention the standard way (StatusNotifierItem
+//      Status == NeedsAttention);
+//   3. it flashes by flipping its icon on a timer — WeChat does this every
+//      500 ms and never touches Status — which the widget detects separately
+//      and passes in as `flashing`.
+//
+// `attentionStatus` is Status.NeedsAttention from QML; `flashing` is a boolean
+// the caller maintains (see BarWidget.noteIconChange).
+function shownOnBar(item, hiddenIds, revealAttention, attentionStatus, flashing) {
+  if (!item) return false
+  if (!isHidden(hiddenIds, trayId(item))) return true
+  if (revealAttention !== true) return false
+  if (flashing === true) return true
+  return attentionStatus !== undefined && item.status === attentionStatus
+}
+
+// Sliding-window bookkeeping for flash detection. Returns the next score map
+// and whether the id is currently considered flashing. Kept here so the widget
+// only has to wire signals to it and `node --test` can cover the thresholds.
+function noteFlash(scoreMap, id, now, windowMs, minChanges) {
+  var next = {}
+  for (var key in scoreMap) next[key] = scoreMap[key]
+  var key2 = String(id || "")
+  if (!key2) return { scores: next, flashing: false }
+  var entry = next[key2] || { times: [] }
+  var times = []
+  var list = asList(entry.times)
+  for (var i = 0; i < list.length; i++) {
+    if (now - list[i] < windowMs) times.push(list[i])
+  }
+  times.push(now)
+  next[key2] = { times: times }
+  return { scores: next, flashing: times.length >= minChanges }
+}
+
+// Drops ids whose last change fell outside the window, so a stopped flash
+// clears itself without a second timer.
+function decayFlash(scoreMap, now, windowMs) {
+  var next = {}
+  for (var key in scoreMap) {
+    var entry = scoreMap[key]
+    var list = asList(entry && entry.times)
+    var kept = []
+    for (var i = 0; i < list.length; i++) {
+      if (now - list[i] < windowMs) kept.push(list[i])
+    }
+    if (kept.length > 0) next[key] = { times: kept }
+  }
+  return next
+}
+
 // `passiveStatus` is passed in (Status.Passive from QML) so this file stays
 // free of Quickshell imports. Items with no status at all are treated as live.
 function partition(items, hiddenIds, ownsDropbox, passiveStatus) {
@@ -162,6 +217,9 @@ if (typeof module !== "undefined") {
     isSymbolicIcon: isSymbolicIcon,
     iconSource: iconSource,
     isHidden: isHidden,
+    shownOnBar: shownOnBar,
+    noteFlash: noteFlash,
+    decayFlash: decayFlash,
     partition: partition,
     withHidden: withHidden,
     toggleHidden: toggleHidden,

@@ -119,6 +119,43 @@ test("hiddenUnion adds every live id for hide-all", () => {
   assert.deepEqual(TrayModel.hiddenUnion(["gone"], values), ["gone", "a", "b"]);
 });
 
+test("shownOnBar keeps hidden icons off the bar, and reveals them on attention", () => {
+  const plain = item("a");
+  const attention = item("a", { status: 2 }); // NeedsAttention
+
+  assert.equal(TrayModel.shownOnBar(plain, [], true, 2, false), true);
+  assert.equal(TrayModel.shownOnBar(plain, ["a"], true, 2, false), false);
+  assert.equal(TrayModel.shownOnBar(attention, ["a"], true, 2, false), true);
+  // setting off: nothing is revealed
+  assert.equal(TrayModel.shownOnBar(attention, ["a"], false, 2, false), false);
+});
+
+test("shownOnBar reveals a hidden icon that flashes its own icon", () => {
+  // WeChat keeps Status == Active and flips the pixmap every 500 ms instead.
+  const flashing = item("wechat", { status: 1 });
+  assert.equal(TrayModel.shownOnBar(flashing, ["wechat"], true, 2, true), true);
+  assert.equal(TrayModel.shownOnBar(flashing, ["wechat"], true, 2, false), false);
+});
+
+test("noteFlash only flags a sustained burst inside the window", () => {
+  let scores = {};
+  let r = TrayModel.noteFlash(scores, "wechat", 1000, 1200, 2);
+  scores = r.scores;
+  assert.equal(r.flashing, false, "a single icon change is not a flash");
+  r = TrayModel.noteFlash(scores, "wechat", 1500, 1200, 2);
+  scores = r.scores;
+  assert.equal(r.flashing, true, "second change inside the window is a flash");
+  // a change far outside the window does not accumulate
+  r = TrayModel.noteFlash(scores, "wechat", 9000, 1200, 2);
+  assert.equal(r.flashing, false);
+});
+
+test("decayFlash clears a flash that stopped", () => {
+  let scores = TrayModel.noteFlash({}, "wechat", 1000, 1200, 2).scores;
+  scores = TrayModel.noteFlash(scores, "wechat", 1500, 1200, 2).scores;
+  assert.deepEqual(TrayModel.decayFlash(scores, 5000, 1200), {});
+});
+
 // ---------------------------------------------------------------------- I18n
 
 test("detectLanguage maps zh locales to Chinese and everything else to English", () => {
@@ -163,7 +200,11 @@ test("the bar keeps every icon visible unless the user hides it", () => {
   // Default classification is "on the bar"; only the hidden list moves icons
   // into the panel.
   assert.match(source, /readonly property var hiddenIds: settings\.hidden instanceof Array \? settings\.hidden : \[\]/);
-  assert.match(source, /visible: root\.shownItems\.length > 0 \|\| root\.hiddenItems\.length > 0/);
+  // Visibility is decided per delegate by a binding (so a status flip or a
+  // detected flash re-evaluates it), not by a JS partition that would
+  // never re-run when an item's own properties change.
+  assert.match(source, /model: root\.allItems/);
+  assert.match(source, /visible: root\.itemShownOnBar\(modelData\)/);
 });
 
 test("settings persist through the inline shell.json entry", () => {

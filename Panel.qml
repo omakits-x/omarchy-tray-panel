@@ -127,6 +127,13 @@ Panel {
       root.hostWidget.setBarSection(value)
   }
 
+  function setRevealOnAttention(value) {
+    if (root.hostWidget && typeof root.hostWidget.setRevealOnAttention === "function")
+      root.hostWidget.setRevealOnAttention(value)
+  }
+
+  readonly property bool revealOnAttention: root.setting("revealOnAttention", true) === true
+
   readonly property string barSection: root.hostWidget ? String(root.hostWidget.barSection || "") : ""
 
   function itemHidden(id) {
@@ -629,6 +636,38 @@ Panel {
               selected: root.barSection === modelData.value
               bordered: true
               onClicked: root.setBarSection(modelData.value)
+            }
+          }
+        }
+
+        Row {
+          spacing: Style.space(6)
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(56)
+            text: root.tr("panel.revealOnAttention")
+            color: Qt.darker(root.contentForeground, 1.4)
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Repeater {
+            model: [
+              { label: root.tr("panel.toggle.on"), value: true },
+              { label: root.tr("panel.toggle.off"), value: false }
+            ]
+
+            Button {
+              required property var modelData
+              text: modelData.label
+              foreground: root.contentForeground
+              fontSize: Style.font.caption
+              horizontalPadding: 6
+              verticalPadding: 2
+              selected: root.revealOnAttention === modelData.value
+              bordered: true
+              onClicked: root.setRevealOnAttention(modelData.value)
             }
           }
         }

@@ -42,6 +42,67 @@ BarWidget {
 
   // ----------------------------------------------------------- tray contents
 
+  // Bring a hidden icon back onto the bar while it wants attention, either the
+  // standard way (StatusNotifierItem Status == NeedsAttention) or by flashing
+  // its icon on a timer — WeChat flips its tray icon every 500 ms and never
+  // touches Status, so a Status-only check would never fire for it.
+  //
+  // Detection is event driven, not polled: the per-item Connections below hook
+  // `iconChanged`, which Quickshell emits from the NewIcon signal the app
+  // already sends. The extra work is one small object update per icon change
+  // (~2/s for one flashing app); the bitmap decode happens with or without
+  // this feature, because the shell ingests NewIcon regardless.
+  readonly property bool revealOnAttention: root.setting("revealOnAttention", true) === true
+  readonly property int flashWindowMs: 1200
+  readonly property int flashMinChanges: 2
+  property var flashScores: ({})
+  property var flashingIds: ({})
+
+  function noteIconChange(item) {
+    if (!root.revealOnAttention) return
+    var id = TrayModel.trayId(item)
+    if (!id || !root.itemHidden(item)) return
+    var result = TrayModel.noteFlash(root.flashScores, id, Date.now(),
+      root.flashWindowMs, root.flashMinChanges)
+    root.flashScores = result.scores
+    if (result.flashing) {
+      var flags = {}
+      for (var key in root.flashingIds) flags[key] = root.flashingIds[key]
+      flags[id] = true
+      root.flashingIds = flags
+    }
+  }
+
+  function itemHidden(item) {
+    return TrayModel.isHidden(root.hiddenIds, TrayModel.trayId(item))
+  }
+
+  function itemShownOnBar(item) {
+    var id = TrayModel.trayId(item)
+    return TrayModel.shownOnBar(item, root.hiddenIds, root.revealOnAttention,
+      Status.NeedsAttention, root.flashingIds[id] === true)
+  }
+
+  // Sweeps expired entries so a flash that stopped clears itself. Cheap: it
+  // only walks the few ids that changed recently.
+  Timer {
+    interval: 600
+    running: root.revealOnAttention
+    repeat: true
+    onTriggered: {
+      var now = Date.now()
+      var scores = TrayModel.decayFlash(root.flashScores, now, root.flashWindowMs)
+      root.flashScores = scores
+      var flags = {}
+      var any = false
+      for (var key in root.flashingIds) {
+        var entry = scores[key]
+        if (entry && root.flashingIds[key] === true) { flags[key] = true; any = true }
+      }
+      if (any || Object.keys(root.flashingIds).length > 0) root.flashingIds = flags
+    }
+  }
+
   // Only Dropbox ownership is read out of the bar layout, and it is cached as a
   // boolean. Reading `bar.layoutConfig` inside the trayState binding formed a
   // loop: partition -> new arrays -> the Repeater rebuilds its icon buttons ->
@@ -121,6 +182,10 @@ BarWidget {
 
   function setPanelPlacement(value) {
     root.persist({ panelPlacement: String(value || "button") })
+  }
+
+  function setRevealOnAttention(value) {
+    root.persist({ revealOnAttention: value === true || value === "true" })
   }
 
   // ------------------------------------------------------------------ panel
@@ -303,7 +368,7 @@ BarWidget {
     root.menuOpen = false
   }
 
-  visible: root.shownItems.length > 0 || root.hiddenItems.length > 0
+  visible: root.allItems.length > 0
   clip: false
   implicitWidth: root.vertical ? root.barSize : trayContent.implicitWidth
   implicitHeight: root.vertical ? trayContent.implicitHeight : root.barSize
@@ -323,18 +388,32 @@ BarWidget {
       spacing: 0
 
       Repeater {
-        model: root.shownItems
+        // Every item is instantiated; visibility is decided by a binding so a
+        // status flip or a detected flash re-evaluates it. A JS partition
+        // would never re-run, because SystemTray.items.values does not change
+        // when an item's own properties do.
+        model: root.allItems
 
         TrayIconButton {
           required property var modelData
           trayItem: modelData
           bar: root.bar
-          barClickTarget: true
+          barClickTarget: root.itemShownOnBar(modelData)
+          visible: root.itemShownOnBar(modelData)
           cellSize: root.trayItemExtent
           iconSize: Style.space(12)
           foreground: root.foreground
           onMenuRequested: function(item, anchor, mouse) { root.openMenu(item, anchor, mouse) }
           onActivated: if (root.panelOpen) root.close()
+
+          // Flash detection, only for icons the user hid and only while the
+          // feature is on. `enabled` is itself a binding, so toggling the
+          // setting or hiding the icon re-wires it.
+          Connections {
+            target: modelData
+            enabled: root.revealOnAttention && root.itemHidden(modelData)
+            function onIconChanged() { root.noteIconChange(modelData) }
+          }
         }
       }
 
@@ -361,18 +440,32 @@ BarWidget {
       spacing: 0
 
       Repeater {
-        model: root.shownItems
+        // Every item is instantiated; visibility is decided by a binding so a
+        // status flip or a detected flash re-evaluates it. A JS partition
+        // would never re-run, because SystemTray.items.values does not change
+        // when an item's own properties do.
+        model: root.allItems
 
         TrayIconButton {
           required property var modelData
           trayItem: modelData
           bar: root.bar
-          barClickTarget: true
+          barClickTarget: root.itemShownOnBar(modelData)
+          visible: root.itemShownOnBar(modelData)
           cellSize: root.trayItemExtent
           iconSize: Style.space(12)
           foreground: root.foreground
           onMenuRequested: function(item, anchor, mouse) { root.openMenu(item, anchor, mouse) }
           onActivated: if (root.panelOpen) root.close()
+
+          // Flash detection, only for icons the user hid and only while the
+          // feature is on. `enabled` is itself a binding, so toggling the
+          // setting or hiding the icon re-wires it.
+          Connections {
+            target: modelData
+            enabled: root.revealOnAttention && root.itemHidden(modelData)
+            function onIconChanged() { root.noteIconChange(modelData) }
+          }
         }
       }
 
