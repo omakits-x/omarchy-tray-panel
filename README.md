@@ -3,7 +3,7 @@
 An Omarchy bar widget that keeps system tray icons on the bar and moves the
 ones you hide into a Windows-style overflow panel.
 
-<img width="360" src="preview.png" alt="Tray Panel: the hidden-icons overflow panel above the per-icon settings view" />
+<img width="400" src="preview.png" alt="Tray Panel: the hidden-icons overflow view above the tray settings form, with sections for the icon list, panel placement, reveal-on-attention and language" />
 
 
 ## Features
