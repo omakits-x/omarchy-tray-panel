@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.omakitsx.tray-panel",
+  "name": "Tray Panel",
+  "version": "0.1.0",
+  "author": "omakits-x",
+  "license": "MIT",
+  "description": "System tray icons on the bar with a Windows-style overflow panel for hidden ones.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Tray Panel",
+    "description": "Tray icons on the bar plus an overflow panel for the ones you hide.",
+    "category": "Status",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
