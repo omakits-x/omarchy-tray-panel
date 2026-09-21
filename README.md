@@ -3,7 +3,8 @@
 An Omarchy bar widget that keeps system tray icons on the bar and moves the
 ones you hide into a Windows-style overflow panel.
 
-<!-- TODO: preview.png -->
+<img width="324" height="333" alt="image" src="https://github.com/user-attachments/assets/9ef05964-6517-438e-ab2e-79f954b3fb2e" />
+
 
 ## Features
 
