@@ -3,7 +3,7 @@
 An Omarchy bar widget that keeps system tray icons on the bar and moves the
 ones you hide into a Windows-style overflow panel.
 
-<img width="324" height="333" alt="image" src="https://github.com/user-attachments/assets/9ef05964-6517-438e-ab2e-79f954b3fb2e" />
+<img width="360" src="preview.png" alt="Tray Panel: the hidden-icons overflow panel above the per-icon settings view" />
 
 
 ## Features
@@ -12,8 +12,12 @@ ones you hide into a Windows-style overflow panel.
 - Hide any icon and it moves into the panel instead of disappearing.
 - Left click the chevron for the hidden icons, right click for the settings.
 - Settings for every icon (show/hide), the panel position (at button / left /
-  centre / right), the widget's bar section (left / centre / right) and the
-  language (auto / English / 中文).
+  centre / right), the widget's bar section (left / centre / right),
+  reveal-on-attention and the language (auto / English / 中文).
+- A hidden icon comes back onto the bar while it wants attention, either the
+  standard StatusNotifierItem way (`Status == NeedsAttention`) or by flashing
+  its icon on a timer — WeChat flips its tray icon every 500 ms and never
+  touches `Status`, so a status-only check would never fire for it.
 - Full tray interaction survives in both surfaces: left click activates, right
   click opens the app's own menu — rendered in place, submenus included —
   middle click secondary-activates, and the wheel is forwarded.
@@ -62,6 +66,7 @@ Settings live inline in the widget's `shell.json` entry:
   "id": "io.github.omakitsx.tray-panel",
   "hidden": ["app_status_icon_1"],
   "panelPlacement": "button",
+  "revealOnAttention": true,
   "language": "auto"
 }
 ```
@@ -70,6 +75,11 @@ Settings live inline in the widget's `shell.json` entry:
   stays on the bar. Unknown ids are kept, so an app that is not running keeps
   its setting.
 - `panelPlacement` — `button` (under the chevron), `left`, `center`, `right`.
+- `revealOnAttention` — `true` (default) brings a hidden icon back onto the bar
+  while it asks for attention, through either detection path. Detection is
+  event driven: it hooks `iconChanged`, which the shell emits from the
+  `NewIcon` signal the app already sends, so there is no polling and only
+  hidden icons are watched.
 - `language` — `auto` (follow the locale), `en`, `zh`.
 
 The bar section is not stored here: choosing one in the settings runs
@@ -89,12 +99,14 @@ qmllint -I "$OMARCHY_PATH/shell" *.qml
 Two platform behaviours cost the most time while building this plugin; both are
 recorded in the `omarchy-plugin` skill with reproduction and fix:
 
-- `QtQuick.Controls` types such as `ScrollBar` do not resolve inside a
-  third-party plugin — the type lives in the Controls style module, which the
-  shell does not load for user plugins, so the whole component fails with
-  `ScrollBar is not a type`. Draw the affordance yourself (see `ScrollHint.qml`)
-  or use `qs.Ui` components. The built-in widgets can use them because they are
-  compiled inside the shell itself.
+- `QtQuick.Controls` types such as `ScrollBar` **do** resolve inside a
+  third-party plugin. An early `ScrollBar is not a type` failure here was a
+  stale QML disk cache replaying a broken first compile, not a real limitation:
+  the plugin kept failing identically until `~/.cache/quickshell/qmlcache` was
+  deleted and the shell restarted. Clear the cache before believing a type is
+  missing. (The hand-rolled `ScrollHint.qml` used by the menu view predates that
+  discovery; the panel's two views now use a real, draggable `ScrollBar` with
+  `policy: AsNeeded`, so nothing shows while the icons fit.)
 - `SystemTray.items.values` is list-like, not a real JS `Array`, so
   `Array.isArray()` returns false and any partition built on it silently
   produces nothing — the widget then renders as `visible: false` with no error.

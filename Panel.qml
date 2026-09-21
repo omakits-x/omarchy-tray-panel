@@ -14,6 +14,7 @@
 // through QsWindow of the anchor item, which cannot cross window boundaries.
 
 import QtQuick
+import QtQuick.Controls
 import Quickshell
 import Quickshell.Services.SystemTray
 import qs.Commons
@@ -307,9 +308,28 @@ Panel {
           flickableDirection: Flickable.VerticalFlick
           interactive: contentHeight > height
 
+          // A real, draggable scrollbar. QtQuick.Controls does resolve inside
+          // a user plugin — the earlier "ScrollBar is not a type" failures were
+          // a stale QML disk cache replaying a broken first compile.
+          ScrollBar.vertical: ScrollBar {
+            id: gridScroll
+            policy: ScrollBar.AsNeeded
+            width: Style.space(5)
+            padding: 0
+
+            contentItem: Rectangle {
+              implicitWidth: Style.space(5)
+              radius: width / 2
+              color: root.contentForeground
+              opacity: gridScroll.pressed ? 0.9 : (gridScroll.active ? 0.65 : 0.35)
+            }
+
+            background: Item {}
+          }
+
           Grid {
             id: grid
-            width: gridFlick.width
+            width: gridFlick.width - (gridScroll.visible ? Style.space(7) : 0)
             columns: root.gridColumns
             spacing: 0
 
@@ -438,9 +458,27 @@ Panel {
           flickableDirection: Flickable.VerticalFlick
           interactive: contentHeight > height
 
+          // AsNeeded: while every icon fits there is no scrollbar at all, so a
+          // short list looks exactly as it did before.
+          ScrollBar.vertical: ScrollBar {
+            id: listScroll
+            policy: ScrollBar.AsNeeded
+            width: Style.space(5)
+            padding: 0
+
+            contentItem: Rectangle {
+              implicitWidth: Style.space(5)
+              radius: width / 2
+              color: root.contentForeground
+              opacity: listScroll.pressed ? 0.9 : (listScroll.active ? 0.65 : 0.35)
+            }
+
+            background: Item {}
+          }
+
           Column {
             id: list
-            width: listFlick.width
+            width: listFlick.width - (listScroll.visible ? Style.space(7) : 0)
             spacing: 0
 
             Repeater {
