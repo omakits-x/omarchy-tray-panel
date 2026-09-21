@@ -59,6 +59,50 @@ Panel {
   readonly property color contentForeground: root.bar ? root.bar.foreground : Color.foreground
   readonly property string contentFontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 
+  // The settings rows put their option chips behind a caption column, and how
+  // wide that column has to be is a property of the language: "Panel position"
+  // needs about half again the room of "面板位置". A hard-coded column let the
+  // English captions run out of their box and paint underneath the chips, so
+  // the captions are measured instead and handed to each OptionRow.
+  //
+  // The probes live at the panel root because the settings view is a lazily
+  // instantiated Component, and the card width below needs the number before
+  // that view exists.
+  TextMetrics {
+    id: placementLabelMetrics
+    font.family: root.contentFontFamily
+    font.pixelSize: Style.font.caption
+    text: root.tr("panel.placement")
+  }
+
+  TextMetrics {
+    id: barPositionLabelMetrics
+    font: placementLabelMetrics.font
+    text: root.tr("panel.barPosition")
+  }
+
+  TextMetrics {
+    id: revealLabelMetrics
+    font: placementLabelMetrics.font
+    text: root.tr("panel.revealOnAttention")
+  }
+
+  TextMetrics {
+    id: languageLabelMetrics
+    font: placementLabelMetrics.font
+    text: root.tr("panel.language")
+  }
+
+  // Floor, not target: Chinese never grew past the column it has always had,
+  // so its layout is untouched.
+  readonly property real settingsLabelMinWidth: Style.space(56)
+  readonly property real settingsLabelWidth: Math.max(settingsLabelMinWidth,
+    placementLabelMetrics.width,
+    barPositionLabelMetrics.width,
+    revealLabelMetrics.width,
+    languageLabelMetrics.width)
+
+
   readonly property int gridColumns: 5
   readonly property real cellSize: Style.space(44)
   readonly property real rowsCap: Math.max(Style.space(120), panel.availableCardHeight - panel.verticalContentInset)
@@ -222,9 +266,18 @@ Panel {
     // Where the card lands: under the chevron that opened it, or centred on
     // the screen. KeyboardPanel supports exactly these two.
     centerOnBar: root.setting("panelPlacement", "button") === "center"
-    contentWidth: panel.fittedContentWidth(root.view === "settings" ? Style.space(324) : Style.space(260))
+    // The settings view is a form: its rows need room for a caption column
+    // beside the option chips, which the 260px icon grid does not. The card
+    // still grows if a language asks for a wider caption column than the base
+    // width already reserves.
+    contentWidth: panel.fittedContentWidth(root.view === "settings"
+      ? Style.space(390) + Math.max(0, root.settingsLabelWidth - root.settingsLabelMinWidth)
+      : Style.space(260))
+    // No fixed height cap: the settings view sizes its icon list to whatever
+    // room is left over (settingsRoot.listCap), so the card is only ever as
+    // tall as the screen allows it to be.
     contentHeight: panel.fittedContentHeight(
-      viewLoader.item ? viewLoader.item.implicitHeight : Style.space(120), Style.space(460))
+      viewLoader.item ? viewLoader.item.implicitHeight : Style.space(120))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -390,6 +443,18 @@ Panel {
       width: parent.width
       spacing: Style.space(8)
 
+      // Everything below the icon list, plus the header above it. The list is
+      // the only part that scrolls, so it is the part that has to give when the
+      // card runs out of room — otherwise a long tray pushes the Done button
+      // off the bottom of the card and it can never be reached.
+      readonly property real listCap: {
+        var chrome = settingsHeader.implicitHeight + settingsHint.implicitHeight
+          + onBarHeader.implicitHeight + listActions.implicitHeight + settingsFooter.implicitHeight
+          + settingsRoot.spacing * 5
+        return Math.max(Style.space(96),
+          panel.availableCardHeight - panel.verticalContentInset - chrome)
+      }
+
       Item {
         id: settingsHeader
         width: settingsRoot.width
@@ -427,6 +492,7 @@ Panel {
       }
 
       Text {
+        id: settingsHint
         width: settingsRoot.width
         text: root.tr("panel.settings.hint")
         color: Qt.darker(root.contentForeground, 1.4)
@@ -436,10 +502,37 @@ Panel {
       }
 
       Item {
+        id: onBarHeader
+        width: settingsRoot.width
+        implicitHeight: onBarTitle.implicitHeight
+
+        PanelSectionHeader {
+          id: onBarTitle
+          anchors.left: parent.left
+          anchors.verticalCenter: parent.verticalCenter
+          text: root.tr("panel.section.bar")
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+        }
+
+        Text {
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          text: I18n.format(root.language, "panel.count", {
+            shown: root.trayState.shown ? root.trayState.shown.length : 0,
+            hidden: root.hiddenItems.length
+          })
+          color: Qt.darker(root.contentForeground, 1.4)
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.caption
+        }
+      }
+
+      Item {
         id: listBox
         width: settingsRoot.width
         implicitHeight: root.allItems.length > 0
-          ? Math.min(list.implicitHeight, root.rowsCap)
+          ? Math.min(list.implicitHeight, settingsRoot.listCap)
           : trayEmptyLabel.implicitHeight
 
         ScrollHint {
@@ -531,33 +624,22 @@ Panel {
                 // labelled with the *action* reads as the current state, so
                 // icons that were already hidden showed "Show" and looked
                 // inverted. Two options with the live one highlighted say it
-                // plainly.
-                Row {
+                // plainly — and it is the same OptionRow the settings footer
+                // uses, minus the caption.
+                OptionRow {
                   id: rowToggle
                   anchors.verticalCenter: parent.verticalCenter
                   anchors.right: parent.right
                   anchors.rightMargin: Style.space(4)
-                  spacing: Style.space(2)
-
-                  Button {
-                    text: root.tr("panel.action.show")
-                    selected: !row.itemHidden
-                    foreground: root.contentForeground
-                    fontSize: Style.font.bodySmall
-                    horizontalPadding: 8
-                    verticalPadding: 3
-                    onClicked: root.setHidden(row.itemId, false)
-                  }
-
-                  Button {
-                    text: root.tr("panel.action.hide")
-                    selected: row.itemHidden
-                    foreground: root.contentForeground
-                    fontSize: Style.font.bodySmall
-                    horizontalPadding: 8
-                    verticalPadding: 3
-                    onClicked: root.setHidden(row.itemId, true)
-                  }
+                  options: [
+                    { label: root.tr("panel.action.show"), value: "shown" },
+                    { label: root.tr("panel.action.hide"), value: "hidden" }
+                  ]
+                  value: row.itemHidden ? "hidden" : "shown"
+                  fontSize: Style.font.bodySmall
+                  foreground: root.contentForeground
+                  fontFamily: root.contentFontFamily
+                  onSelected: function(value) { root.setHidden(row.itemId, value === "hidden") }
                 }
 
                 MouseArea {
@@ -584,163 +666,118 @@ Panel {
         }
       }
 
+      Row {
+        id: listActions
+        width: settingsRoot.width
+        spacing: Style.space(8)
+
+        Button {
+          width: (parent.width - parent.spacing) / 2
+          text: root.tr("panel.action.showAll")
+          bordered: true
+          foreground: root.contentForeground
+          fontSize: Style.font.bodySmall
+          verticalPadding: 4
+          onClicked: root.showAll()
+        }
+
+        Button {
+          width: (parent.width - parent.spacing) / 2
+          text: root.tr("panel.action.hideAll")
+          bordered: true
+          foreground: root.contentForeground
+          fontSize: Style.font.bodySmall
+          verticalPadding: 4
+          onClicked: root.hideAll()
+        }
+      }
+
       Column {
         id: settingsFooter
         width: settingsRoot.width
-        spacing: Style.space(4)
+        spacing: Style.space(8)
 
-        Row {
-          spacing: Style.space(6)
+        PanelSeparator { foreground: root.contentForeground }
 
-          Button {
-            text: root.tr("panel.action.showAll")
-            foreground: root.contentForeground
-            fontSize: Style.font.bodySmall
-            horizontalPadding: 8
-            verticalPadding: 3
-            onClicked: root.showAll()
-          }
-
-          Button {
-            text: root.tr("panel.action.hideAll")
-            foreground: root.contentForeground
-            fontSize: Style.font.bodySmall
-            horizontalPadding: 8
-            verticalPadding: 3
-            onClicked: root.hideAll()
-          }
+        PanelSectionHeader {
+          text: root.tr("panel.section.panel")
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
         }
 
-        Row {
-          spacing: Style.space(6)
-
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(56)
-            text: root.tr("panel.placement")
-            color: Qt.darker(root.contentForeground, 1.4)
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-          }
-
-          Repeater {
-            model: [
-              { label: root.tr("panel.placement.button"), value: "button" },
-              { label: root.tr("panel.placement.left"), value: "left" },
-              { label: root.tr("panel.placement.center"), value: "center" },
-              { label: root.tr("panel.placement.right"), value: "right" }
-            ]
-
-            Button {
-              required property var modelData
-              text: modelData.label
-              foreground: root.contentForeground
-              fontSize: Style.font.caption
-              horizontalPadding: 6
-              verticalPadding: 2
-              selected: root.setting("panelPlacement", "button") === modelData.value
-              bordered: true
-              onClicked: root.setPanelPlacement(modelData.value)
-            }
-          }
+        OptionRow {
+          label: root.tr("panel.placement")
+          labelWidth: root.settingsLabelWidth
+          options: [
+            { label: root.tr("panel.placement.button"), value: "button" },
+            { label: root.tr("panel.placement.left"), value: "left" },
+            { label: root.tr("panel.placement.center"), value: "center" },
+            { label: root.tr("panel.placement.right"), value: "right" }
+          ]
+          value: String(root.setting("panelPlacement", "button"))
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          onSelected: function(value) { root.setPanelPlacement(value) }
         }
 
-        Row {
-          spacing: Style.space(6)
-
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(56)
-            text: root.tr("panel.barPosition")
-            color: Qt.darker(root.contentForeground, 1.4)
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-          }
-
-          Repeater {
-            model: [
-              { label: root.tr("panel.placement.left"), value: "left" },
-              { label: root.tr("panel.placement.center"), value: "center" },
-              { label: root.tr("panel.placement.right"), value: "right" }
-            ]
-
-            Button {
-              required property var modelData
-              text: modelData.label
-              foreground: root.contentForeground
-              fontSize: Style.font.caption
-              horizontalPadding: 6
-              verticalPadding: 2
-              selected: root.barSection === modelData.value
-              bordered: true
-              onClicked: root.setBarSection(modelData.value)
-            }
-          }
+        OptionRow {
+          label: root.tr("panel.barPosition")
+          labelWidth: root.settingsLabelWidth
+          options: [
+            { label: root.tr("panel.placement.left"), value: "left" },
+            { label: root.tr("panel.placement.center"), value: "center" },
+            { label: root.tr("panel.placement.right"), value: "right" }
+          ]
+          value: root.barSection
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          onSelected: function(value) { root.setBarSection(value) }
         }
 
-        Row {
-          spacing: Style.space(6)
-
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(56)
-            text: root.tr("panel.revealOnAttention")
-            color: Qt.darker(root.contentForeground, 1.4)
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-          }
-
-          Repeater {
-            model: [
-              { label: root.tr("panel.toggle.on"), value: true },
-              { label: root.tr("panel.toggle.off"), value: false }
-            ]
-
-            Button {
-              required property var modelData
-              text: modelData.label
-              foreground: root.contentForeground
-              fontSize: Style.font.caption
-              horizontalPadding: 6
-              verticalPadding: 2
-              selected: root.revealOnAttention === modelData.value
-              bordered: true
-              onClicked: root.setRevealOnAttention(modelData.value)
-            }
-          }
+        // A switch, not another pair of chips: this one is a plain on/off, and
+        // the labeled Toggle row keeps its label on the left and its switch on
+        // the right however long the language makes the label.
+        Toggle {
+          width: settingsRoot.width
+          label: root.tr("panel.revealOnAttention")
+          description: root.tr("panel.revealOnAttention.description")
+          checked: root.revealOnAttention
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          onClicked: root.setRevealOnAttention(!root.revealOnAttention)
         }
 
-        Row {
-          spacing: Style.space(6)
+        PanelSeparator { foreground: root.contentForeground }
 
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(56)
-            text: root.tr("panel.language")
-            color: Qt.darker(root.contentForeground, 1.4)
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-          }
+        PanelSectionHeader {
+          text: root.tr("panel.section.language")
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+        }
 
-          Repeater {
-            model: [
-              { label: root.tr("panel.language.auto"), value: "auto" },
-              { label: "EN", value: "en" },
-              { label: "\u4e2d\u6587", value: "zh" }
-            ]
+        OptionRow {
+          label: root.tr("panel.language")
+          labelWidth: root.settingsLabelWidth
+          options: [
+            { label: root.tr("panel.language.auto"), value: "auto" },
+            { label: "EN", value: "en" },
+            { label: "\u4e2d\u6587", value: "zh" }
+          ]
+          value: String(root.setting("language", "auto"))
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          onSelected: function(value) { root.setLanguage(value) }
+        }
 
-            Button {
-              required property var modelData
-              text: modelData.label
-              foreground: root.contentForeground
-              fontSize: Style.font.caption
-              horizontalPadding: 6
-              verticalPadding: 2
-              selected: root.setting("language", "auto") === modelData.value
-              bordered: true
-              onClicked: root.setLanguage(modelData.value)
-            }
-          }
+        Button {
+          width: settingsRoot.width
+          text: root.tr("panel.action.done")
+          bordered: true
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          fontSize: Style.font.bodySmall
+          verticalPadding: 4
+          onClicked: root.close()
         }
       }
     }

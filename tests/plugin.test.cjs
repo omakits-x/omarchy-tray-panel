@@ -29,6 +29,7 @@ test("manifest declares a namespaced bar widget with no clone metadata", () => {
   assert.equal(fs.existsSync(path.join(root, "Panel.qml")), true);
   assert.equal(fs.existsSync(path.join(root, "TrayModel.js")), true);
   assert.equal(fs.existsSync(path.join(root, "I18n.js")), true);
+  assert.equal(fs.existsSync(path.join(root, "OptionRow.qml")), true);
 });
 
 test("plugin folder contains no symlinks", () => {
@@ -193,6 +194,15 @@ test("text falls back to English and then to the key itself", () => {
   assert.equal(I18n.text("en", "missing.key"), "missing.key");
 });
 
+test("format fills named placeholders in either language", () => {
+  const params = { shown: 4, hidden: 2 };
+  assert.equal(I18n.format("en", "panel.count", params), "4 on bar · 2 hidden");
+  assert.equal(I18n.format("zh", "panel.count", params), "4 个在栏上 · 2 个已隐藏");
+  // Missing params leave the placeholder visible rather than printing
+  // "undefined" into the panel.
+  assert.equal(I18n.format("en", "panel.count", {}), "{shown} on bar · {hidden} hidden");
+});
+
 // ------------------------------------------------------------- source checks
 
 test("the bar keeps every icon visible unless the user hides it", () => {
@@ -221,4 +231,47 @@ test("panel and bar menu share one renderer and one popout owner", () => {
   assert.match(panel, /TrayMenuList \{/);
   assert.match(bar, /owner: root/);
   assert.match(panel, /owner: root\.barIdentity/);
+});
+
+test("settings rows measure their caption column instead of hard-coding it", () => {
+  const panel = read("Panel.qml");
+  // A hard-coded label column let the wider English captions ("Panel
+  // position", "Reveal flashing") run out of their box and paint under the
+  // option chips.
+  assert.doesNotMatch(panel, /width: Style\.space\(56\)/);
+  assert.equal((panel.match(/TextMetrics \{/g) || []).length, 4);
+  assert.match(panel, /readonly property real settingsLabelWidth: Math\.max\(settingsLabelMinWidth,/);
+  // Every caption/chip row takes the measured column ...
+  assert.equal((panel.match(/labelWidth: root\.settingsLabelWidth/g) || []).length, 3);
+  // ... and the card grows with it, so the chips keep their room.
+  assert.match(panel, /Style\.space\(390\) \+ Math\.max\(0, root\.settingsLabelWidth - root\.settingsLabelMinWidth\)/);
+});
+
+test("option rows share one component built on the shell's ButtonGroup", () => {
+  const panel = read("Panel.qml");
+  const optionRow = read("OptionRow.qml");
+  // Three settings rows plus the per-icon Show/Hide pair.
+  assert.equal((panel.match(/OptionRow \{/g) || []).length, 4);
+  assert.match(optionRow, /import qs\.Ui/);
+  assert.match(optionRow, /ButtonGroup \{/);
+  // The panel drives its own keyboard cursor, so a chip group must not be a
+  // second Tab stop inside it.
+  assert.match(optionRow, /focusable: false/);
+});
+
+test("the reveal setting is a labeled switch row", () => {
+  const panel = read("Panel.qml");
+  // A plain on/off is a switch, and Toggle keeps its label and its switch
+  // apart however long the label gets — no caption column to measure.
+  assert.match(panel, /Toggle \{\s*width: settingsRoot\.width\s*label: root\.tr\("panel\.revealOnAttention"\)/);
+  assert.match(panel, /onClicked: root\.setRevealOnAttention\(!root\.revealOnAttention\)/);
+});
+
+test("the settings card keeps the Done button reachable", () => {
+  const panel = read("Panel.qml");
+  // The icon list is the only scrolling part, so it is sized from what the
+  // rest of the form leaves over instead of from a fixed row cap.
+  assert.match(panel, /readonly property real listCap:/);
+  assert.match(panel, /Math\.min\(list\.implicitHeight, settingsRoot\.listCap\)/);
+  assert.match(panel, /text: root\.tr\("panel\.action\.done"\)/);
 });

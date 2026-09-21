@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.omakitsx.tray-panel",
   "name": "Tray Panel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "omakits-x",
   "license": "MIT",
   "description": "System tray icons on the bar with a Windows-style overflow panel for hidden ones.",

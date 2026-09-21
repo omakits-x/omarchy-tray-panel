@@ -13,7 +13,13 @@ ones you hide into a Windows-style overflow panel.
 - Left click the chevron for the hidden icons, right click for the settings.
 - Settings for every icon (show/hide), the panel position (at button / left /
   centre / right), the widget's bar section (left / centre / right),
-  reveal-on-attention and the language (auto / English / 中文).
+  reveal-on-attention and the language (auto / English / 中文), laid out as a
+  form: an icon list with a Show/Hide chip pair per icon, Show all / Hide all,
+  then grouped sections (panel position and bar section as chip rows,
+  reveal-on-attention as a switch row). Captions are measured rather than
+  hard-coded, so the English labels ("Panel position") line up with the Chinese
+  ones instead of running under the chips, and the icon list is sized from what
+  the rest of the form leaves over so the Done button always stays on the card.
 - A hidden icon comes back onto the bar while it wants attention, either the
   standard StatusNotifierItem way (`Status == NeedsAttention`) or by flashing
   its icon on a timer — WeChat flips its tray icon every 500 ms and never
@@ -92,7 +98,17 @@ widget moves exactly as it would from the CLI.
 omarchy plugin validate .
 npm test
 qmllint -I "$OMARCHY_PATH/shell" *.qml
+omarchy restart shell   # required: plugin QML is not hot-reloaded
 ```
+
+Editing plugin QML does not reach the running shell. The plugin watcher does
+log `Local plugin changed, reloading: <id>`, but the widget keeps running the
+component it was created from: `Qt.clearComponentCache` is not a function in
+this Qt build, so Omarchy's reload re-uses the cached compilation and the new
+code never runs. A `preview` edit therefore looks like a no-op until
+`omarchy restart shell` (the bar flickers for a second). Verified on Omarchy
+Quattro with Quickshell 0.3.1: a `console.log` added to `BarWidget.qml` never
+appeared in `qs log` after a file change, and did after a restart.
 
 ## Notes for plugin authors
 

@@ -26,12 +26,18 @@ var strings = {
 
     "panel.settings.hint": "Choose which icons stay on the bar. Hidden icons move into this panel.",
 
+    "panel.section.bar": "ON THE BAR",
+    "panel.section.panel": "PANEL",
+    "panel.section.language": "LANGUAGE",
+    "panel.count": "{shown} on bar · {hidden} hidden",
+
     "panel.action.hide": "Hide",
     "panel.action.show": "Show",
     "panel.action.hideAll": "Hide all",
     "panel.action.showAll": "Show all",
     "panel.action.settings": "Settings",
     "panel.action.back": "Back",
+    "panel.action.done": "Done",
 
     "panel.language": "Language",
     "panel.language.auto": "Auto",
@@ -42,8 +48,7 @@ var strings = {
     "panel.placement.right": "Right",
     "panel.barPosition": "Tray position",
     "panel.revealOnAttention": "Reveal flashing",
-    "panel.toggle.on": "On",
-    "panel.toggle.off": "Off",
+    "panel.revealOnAttention.description": "Bring a hidden icon back onto the bar while it flashes or asks for attention.",
 
     "status.shown": "Shown",
     "status.hidden": "Hidden"
@@ -61,12 +66,18 @@ var strings = {
 
     "panel.settings.hint": "选择哪些图标留在栏上。隐藏的图标会收进这个面板。",
 
+    "panel.section.bar": "栏上的图标",
+    "panel.section.panel": "面板",
+    "panel.section.language": "语言",
+    "panel.count": "{shown} 个在栏上 · {hidden} 个已隐藏",
+
     "panel.action.hide": "隐藏",
     "panel.action.show": "显示",
     "panel.action.hideAll": "全部隐藏",
     "panel.action.showAll": "全部显示",
     "panel.action.settings": "设置",
     "panel.action.back": "返回",
+    "panel.action.done": "完成",
 
     "panel.language": "语言",
     "panel.language.auto": "自动",
@@ -77,8 +88,7 @@ var strings = {
     "panel.placement.right": "右",
     "panel.barPosition": "托盘位置",
     "panel.revealOnAttention": "闪烁时显示",
-    "panel.toggle.on": "开",
-    "panel.toggle.off": "关",
+    "panel.revealOnAttention.description": "隐藏的图标闪烁或请求注意时，先临时回到栏上。",
 
     "status.shown": "显示中",
     "status.hidden": "已隐藏"
@@ -107,12 +117,23 @@ function text(language, key) {
   return value === undefined ? String(key) : value
 }
 
+// "3 on bar · 2 hidden" from "{shown} on bar · {hidden} hidden". Placeholders
+// are named rather than positional so a translation can reorder them.
+function format(language, key, params) {
+  var template = text(language, key)
+  var values = params || {}
+  for (var name in values)
+    template = template.split("{" + name + "}").join(String(values[name]))
+  return template
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     LANGUAGES: LANGUAGES,
     strings: strings,
     detectLanguage: detectLanguage,
     resolveLanguage: resolveLanguage,
-    text: text
+    text: text,
+    format: format
   }
 }
